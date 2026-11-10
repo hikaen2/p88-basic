@@ -24,9 +24,12 @@ git submodule update --init
 ### ホスト版 (PC 上で開発・テスト)
 
 ```
-cargo build
-cargo test
+cargo test                                   # テスト
+cargo run -p p88-host                        # ウィンドウで起動 (保存先は ./disk/)
+cargo run -p p88-host -- --disk samples      # samples/ のプログラムを LOAD できる
 ```
+
+ESC か Ctrl+C で実行を中断、Shift+HOME で画面消去。
 
 ### Circle
 
@@ -58,8 +61,16 @@ pi/make-sd.sh         # 実機用をビルドし、SD カードの中身を pi/s
 
 ## 実機で起動
 
-FAT32 でフォーマットした microSD に `pi/sdcard/` の中身をすべてコピーし、Pi Zero W に挿して電源を入れる。
-ログは UART (GPIO14 = TX、115200bps) に出る。
+1. `pi/make-sd.sh` を実行する (`pi/sdcard/` にファームウェア、`config.txt`、`kernel.img`、サンプルの入った `P88/` ができる)
+2. FAT32 でフォーマットした microSD に `pi/sdcard/` の中身をすべてコピーする
+3. Pi Zero W に HDMI ディスプレイと USB キーボード (OTG 変換経由) をつないで電源を入れる
+
+- キー配列は JIS。US 配列のキーボードなら SD カードに `cmdline.txt` を作り、`keymap=US` と書く
+- プログラムは SD カードの `P88/` フォルダに UTF-8 テキストで保存される。PC で書いた `.BAS` を置けば `LOAD` できる
+- `BEEP` は HDMI の音声として鳴る (音声に対応したディスプレイが必要)
+- ログは UART (GPIO14 = TX、115200bps) に出る
+
+サンプル: `LOAD "HELLO",R` (日本語表示)、`LOAD "CIRCLES",R` (円と塗りつぶし)、`LOAD "MOVE",R` (矢印キーで @ を動かす)
 
 ## QEMU で起動
 
@@ -81,9 +92,9 @@ QEMU での確認状況 (Circle Step51.1.1、QEMU 10.2.1):
 |---|---|
 | HDMI 画面 (640x480) | 動く |
 | USB キーボード (`-device usb-kbd`) | 動く |
-| SD カード | イメージを付けて起動できる (読み書きは未確認) |
-| HDMI 音声 | 未確認。最終確認は実機で行う |
+| SD カード | 動く (`SAVE` / `LOAD` / `FILES` を確認) |
+| HDMI 音声 | QEMU にはない (`BEEP` は鳴らない)。実機で確認する |
 
 ## 既知の制約
 
-- Circle のキーマップは DE / ES / FR / IT / UK / US のみで、JIS 配列はない。
+- Circle のキーマップには JIS 配列がないため、キーボードの生のキーコードを `crates/p88-core/src/hid.rs` で文字に変換している。

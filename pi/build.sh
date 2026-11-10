@@ -11,6 +11,8 @@ if [ "$(cat .p88-mode 2>/dev/null)" != "$MODE" ]; then
     ./configure $OPTS -f >/dev/null
     ./makeall clean >/dev/null
     ./makeall -j"$(nproc)" >/dev/null
+    make -C addon/SDCard clean >/dev/null; make -C addon/SDCard -j"$(nproc)" >/dev/null
+    make -C addon/fatfs clean >/dev/null; make -C addon/fatfs -j"$(nproc)" >/dev/null
     make -C "$DIR/shim" clean >/dev/null
     echo "$MODE" > .p88-mode
 fi

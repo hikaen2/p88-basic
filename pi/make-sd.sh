@@ -12,4 +12,6 @@ if [ ! -f "$OUT/start.elf" ]; then
 fi
 cp "$DIR/circle/boot/config32.txt" "$OUT/config.txt"
 cp "$DIR/shim/kernel.img" "$OUT/kernel.img"
+mkdir -p "$OUT/P88"
+cp "$DIR/../samples/"*.BAS "$OUT/P88/"
 ls -l "$OUT"

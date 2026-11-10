@@ -3,3 +3,9 @@ name = "p88-core"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
+
+[build-dependencies]
+flate2 = "1"
+
+[dependencies]
+libm = "0.2"

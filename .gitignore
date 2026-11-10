@@ -7,3 +7,4 @@
 /pi/shim/kernel*.elf
 /pi/shim/kernel*.map
 /pi/shim/kernel*.lst
+/disk/

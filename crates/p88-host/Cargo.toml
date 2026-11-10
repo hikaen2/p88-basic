@@ -6,3 +6,4 @@ license.workspace = true
 
 [dependencies]
 p88-core = { path = "../p88-core" }
+minifb = "0.29"

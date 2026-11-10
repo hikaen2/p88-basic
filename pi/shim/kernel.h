@@ -11,6 +11,11 @@
 #include <circle/timer.h>
 #include <circle/logger.h>
 #include <circle/bcmframebuffer.h>
+#include <circle/usb/usbhcidevice.h>
+#include <circle/usb/usbkeyboard.h>
+#include <circle/sound/hdmisoundbasedevice.h>
+#include <SDCard/emmc.h>
+#include <fatfs/ff.h>
 #include <circle/types.h>
 
 #define P88_WIDTH	640
@@ -28,6 +33,17 @@ public:
 
 	CBcmFrameBuffer *FrameBuffer (void) { return m_pFrameBuffer; }
 	boolean IsRGB (void) const { return m_bRGB; }
+	boolean HasDisk (void) const { return m_bDisk; }
+	CHDMISoundBaseDevice *Sound (void) { return m_bSound ? &m_Sound : 0; }
+
+	// メインループから呼ぶ: USB 機器の接続・切断を処理する
+	void Update (void);
+
+	// 配列の設定 (cmdline.txt の keymap=US で US、それ以外は JIS)
+	boolean IsKeymapUS (void) const;
+
+	// キーボードの報告 (修飾キー + キーコード 6 個) を 1 つ取り出す
+	boolean PollKeyReport (u8 *pModifiers, u8 Keys[6]);
 
 private:
 	// 初期化順を変えないこと
@@ -39,8 +55,24 @@ private:
 	CInterruptSystem	m_Interrupt;
 	CTimer			m_Timer;
 	CLogger			m_Logger;
+	CUSBHCIDevice		m_USBHCI;
+	CEMMCDevice		m_EMMC;
+	FATFS			m_FileSystem;
+	CHDMISoundBaseDevice	m_Sound;
 	CBcmFrameBuffer		*m_pFrameBuffer;
 	boolean			m_bRGB;		// 画素の並び順 (TRUE: 下位バイトが R)
+	boolean			m_bDisk;	// SD カードが使える
+	boolean			m_bSound;	// HDMI 音声が使える
+	CUSBKeyboardDevice * volatile m_pKeyboard;
+
+	// キーボードの報告のリングバッファ (割り込みで積み、メインループで取り出す)
+	static const unsigned KeyQueueSize = 32;
+	u8			m_KeyQueue[KeyQueueSize][7];
+	volatile unsigned	m_nKeyIn;
+	volatile unsigned	m_nKeyOut;
+
+	static void KeyStatusHandler (unsigned char ucModifiers, const unsigned char RawKeys[6]);
+	static void KeyboardRemovedHandler (CDevice *pDevice, void *pContext);
 
 	static CKernel *s_pThis;
 };

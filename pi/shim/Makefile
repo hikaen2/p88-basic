@@ -8,6 +8,9 @@ RUSTLIB    = $(ROOT)/target/armv6-none-eabihf/release/libp88_pi.a
 OBJS = main.o kernel.o
 
 LIBS = $(RUSTLIB) \
+       $(CIRCLEHOME)/addon/fatfs/libfatfs.a \
+       $(CIRCLEHOME)/addon/SDCard/libsdcard.a \
+       $(CIRCLEHOME)/lib/sound/libsound.a \
        $(CIRCLEHOME)/lib/usb/libusb.a \
        $(CIRCLEHOME)/lib/input/libinput.a \
        $(CIRCLEHOME)/lib/fs/libfs.a \
