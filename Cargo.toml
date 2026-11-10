@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = ["crates/p88-core", "crates/p88-host", "crates/p88-pi"]
+# p88-pi は Pi 専用 (armv6-none-eabihf)。ホストの `cargo build` には含めない
+default-members = ["crates/p88-core", "crates/p88-host"]
+
+[workspace.package]
+edition = "2024"
+license = "GPL-3.0-or-later"
+
+[profile.release]
+opt-level = 2
+panic = "abort"

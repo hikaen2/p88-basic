@@ -1,0 +1,9 @@
+/target
+/pi/sd.img
+/pi/sdcard/
+/pi/shim/*.o
+/pi/shim/*.d
+/pi/shim/kernel*.img
+/pi/shim/kernel*.elf
+/pi/shim/kernel*.map
+/pi/shim/kernel*.lst

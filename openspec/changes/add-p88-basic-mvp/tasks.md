@@ -2,16 +2,16 @@
 
 ## 1. ツールチェーンと骨組み
 
-- [ ] 1.1 `arm-none-eabi-gcc` を導入し、`arm-none-eabi-gcc --version` が通ることを確認する
-- [ ] 1.2 Cargo workspace (`p88-core`, `p88-host`, `p88-pi`) と日付固定の `rust-toolchain.toml` (nightly、`rust-src`) を作り、ホストで `cargo build` が通ることを確認する
-- [ ] 1.3 Circle を submodule として追加し、`RASPPI=1` でビルドして Circle 付属のサンプルが `kernel.img` になることを確認する
-- [ ] 1.4 `qemu-system-arm` を導入し、1.3 の Circle サンプルを `-M raspi0` (`-kernel`、SD イメージ、`-device usb-kbd`) で起動して画面表示と USB キーボード入力が通るかを確認する。通らない部分は README に記し、その部分の確認は実機のみとする
-- [ ] 1.5 README にライセンス (GPLv3)、必要ハード、ビルド手順、QEMU での起動手順を書き、手順どおりに 1.2〜1.4 が再現できることを確認する
+- [x] 1.1 `arm-none-eabi-gcc` を導入し、`arm-none-eabi-gcc --version` が通ることを確認する
+- [x] 1.2 Cargo workspace (`p88-core`, `p88-host`, `p88-pi`) と日付固定の `rust-toolchain.toml` (nightly、`rust-src`) を作り、ホストで `cargo build` が通ることを確認する
+- [x] 1.3 Circle を submodule として追加し、`RASPPI=1` でビルドして Circle 付属のサンプルが `kernel.img` になることを確認する
+- [x] 1.4 `qemu-system-arm` を導入し、1.3 の Circle サンプルを `-M raspi0` (`-kernel`、SD イメージ、`-device usb-kbd`) で起動して画面表示と USB キーボード入力が通るかを確認する。通らない部分は README に記し、その部分の確認は実機のみとする
+- [x] 1.5 README にライセンス (GPLv3)、必要ハード、ビルド手順、QEMU での起動手順を書き、手順どおりに 1.2〜1.4 が再現できることを確認する
 
 ## 2. 実機スパイク: Rust から Circle 経由で HDMI を塗る
 
-- [ ] 2.1 `pi/shim` に最小の CKernel を書き、FB を初期化して `rust_main()` を呼ぶ。`p88_present` と `p88_millis` を C ABI で公開する
-- [ ] 2.2 `p88-pi` を `armv6-none-eabihf` + build-std の staticlib にし、GlobalAlloc (`p88_malloc`/`p88_free`) と panic handler を実装する
+- [x] 2.1 `pi/shim` に最小の CKernel を書き、FB を初期化して `rust_main()` を呼ぶ。`p88_present` と `p88_millis` を C ABI で公開する
+- [x] 2.2 `p88-pi` を `armv6-none-eabihf` + build-std の staticlib にし、GlobalAlloc (`p88_malloc`/`p88_free`) と panic handler を実装する
 - [ ] 2.3 Rust から 640x400 バッファに 16 色の縦帯を描いて present し、QEMU (1.4 で動いた場合) と実機の HDMI に縦帯が表示されることを確認する (リンク・float ABI の検証)
 
 ## 3. フォントとテキスト画面 (core)
