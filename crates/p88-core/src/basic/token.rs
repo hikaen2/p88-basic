@@ -109,7 +109,7 @@ fn is_ident_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '.'
 }
 
-/// 語の先頭で一致するキーワードを最長一致で探す
+/// 語全体がキーワードならそれを返す (TOTAL は TO + TAL ではなく変数)
 fn match_keyword(rest: &str) -> Option<(Kw, usize)> {
     let mut best: Option<(Kw, usize)> = None;
     for (name, kw) in TABLE {
@@ -120,7 +120,7 @@ fn match_keyword(rest: &str) -> Option<(Kw, usize)> {
             }
         }
     }
-    best
+    best.filter(|&(_, n)| !rest[n..].starts_with(is_ident_char))
 }
 
 pub fn tokenize(line: &str) -> Vec<Token> {
@@ -287,12 +287,10 @@ mod tests {
     }
 
     #[test]
-    fn keywords_without_spaces() {
-        let t: Vec<Token> = tokenize("FORI=1TO10").into_iter().collect();
-        assert_eq!(t[0], Token::Kw(Kw::For));
-        assert_eq!(t[1], Token::Ident("I".into()));
-        assert_eq!(t[4], Token::Kw(Kw::To));
-        assert_eq!(t[5], Token::Num(Value::Int(10), "10".into()));
+    fn keyword_is_whole_word() {
+        assert_eq!(tokenize("TOTAL")[0], Token::Ident("TOTAL".into()));
+        assert_eq!(tokenize("FORI")[0], Token::Ident("FORI".into()));
+        assert_eq!(tokenize("CHR$(65)")[0], Token::Kw(Kw::Chr));
     }
 
     #[test]

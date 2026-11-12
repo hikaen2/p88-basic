@@ -74,6 +74,12 @@ fn pow_is_right_assoc() {
 }
 
 #[test]
+fn keyword_needs_whole_word() {
+    assert_eq!(out(&["TOTAL=1:PRINT TOTAL"]), [" 1"]);
+    assert_eq!(out(&["FORI=1TO3"]), ["Syntax error"]);
+}
+
+#[test]
 fn delete_line() {
     assert_eq!(out(&["10 PRINT 1", "10", "LIST"]), Vec::<String>::new());
 }
@@ -181,7 +187,7 @@ fn undefined_line() {
 #[test]
 fn for_loop() {
     assert_eq!(out(&["10 FOR I=1 TO 3:PRINT I;:NEXT", "RUN"]), [" 1  2  3"]);
-    assert_eq!(out(&["FORI=10TO1STEP-3:PRINTI;:NEXTI"]), [" 10  7  4  1"]);
+    assert_eq!(out(&["FOR I=10 TO 1 STEP -3:PRINT I;:NEXT I"]), [" 10  7  4  1"]);
 }
 
 #[test]
@@ -594,27 +600,41 @@ fn edit_pages() {
     assert_eq!(row(&m.text, 24), "340 PRINT 34");
     assert_eq!((m.text.x, m.text.y), (0, 0));
     assert!(matches!(m.mode, Mode::Edit));
+    // 1 行ずつスクロールし、カーソルは PageDown で最終行、PageUp で 1 行目へ
+    m.text.locate(3, 5);
     m.platform.keys.push_back(Key::PageDown);
     settle(&mut m);
-    assert_eq!(row(&m.text, 0), "350 PRINT 35");
-    assert_eq!(row(&m.text, 25 - 1), "590 PRINT 59");
-    m.platform.keys.push_back(Key::PageDown);
-    settle(&mut m);
-    assert_eq!(row(&m.text, 0), "600 PRINT 60");
-    m.platform.keys.push_back(Key::PageDown); // 最後のページでは動かない
-    settle(&mut m);
-    assert_eq!(row(&m.text, 0), "600 PRINT 60");
-    m.platform.keys.extend([Key::PageUp, Key::PageUp, Key::PageUp]);
-    settle(&mut m);
-    assert_eq!(row(&m.text, 0), "10 PRINT 1");
-    // 画面上で書き換えて RET すると行が置き換わり、ページ送りは続けられる
-    m.text.locate(9, 0);
-    m.platform.keys.extend([Key::Char('9' as u16), Key::Enter, Key::PageDown]);
-    settle(&mut m);
-    assert_eq!(row(&m.text, 0), "260 PRINT 26");
+    assert_eq!(row(&m.text, 0), "110 PRINT 11");
+    assert_eq!(row(&m.text, 24), "350 PRINT 35");
+    assert_eq!((m.text.x, m.text.y), (3, 24));
     m.platform.keys.push_back(Key::PageUp);
     settle(&mut m);
-    assert_eq!(row(&m.text, 0), "10 PRINT 9");
+    assert_eq!(row(&m.text, 0), "100 PRINT 10");
+    assert_eq!((m.text.x, m.text.y), (3, 0));
+    m.platform.keys.push_back(Key::PageDown);
+    settle(&mut m);
+    // 末尾を越えると空行が続く
+    for _ in 0..49 {
+        m.platform.keys.push_back(Key::PageDown);
+    }
+    settle(&mut m);
+    assert_eq!(row(&m.text, 0), "600 PRINT 60");
+    assert_eq!(row(&m.text, 1), "");
+    m.platform.keys.push_back(Key::PageDown);
+    settle(&mut m);
+    assert_eq!(row(&m.text, 0), "");
+    // 先頭を越えても空行が続く
+    for _ in 0..63 {
+        m.platform.keys.push_back(Key::PageUp);
+    }
+    settle(&mut m);
+    assert_eq!(row(&m.text, 0), "");
+    assert_eq!(row(&m.text, 3), "10 PRINT 1");
+    // 画面上で書き換えて RET すると行が置き換わり、スクロールは続けられる
+    m.text.locate(9, 3);
+    m.platform.keys.extend([Key::Char('9' as u16), Key::Enter, Key::PageDown]);
+    settle(&mut m);
+    assert_eq!(row(&m.text, 2), "10 PRINT 9");
 }
 
 #[test]

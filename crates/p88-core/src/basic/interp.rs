@@ -63,8 +63,8 @@ pub struct Basic {
     pub line: Option<u16>,
     /// EDIT . の対象 (最後に入力した行、またはエラー・中断の行)
     pub current: Option<u16>,
-    /// EDIT で表示中のページの先頭行 (None なら EDIT モードでない)
-    pub edit_top: Option<u16>,
+    /// EDIT で画面の一番上にある行 (None なら EDIT モードでない)
+    pub edit_top: Option<Slot>,
     toks: Rc<[Token]>,
     pub pos: usize,
     /// 実行中の文の先頭 (中断・エラー時の位置)
@@ -110,6 +110,14 @@ impl Basic {
     pub fn list_line(&self, n: u16) -> Option<String> {
         self.program.get(&n).map(|t| alloc::format!("{n} {}", detokenize(t)))
     }
+}
+
+/// EDIT 中の画面の行: プログラムの行、または先頭より上・末尾より下の空行 (何行目か)
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Slot {
+    Above(u32),
+    Line(u16),
+    Below(u32),
 }
 
 /// LIST した 1 行が画面で占める行数 (全角が行末に入らなければ次の行へ送る)
@@ -811,7 +819,7 @@ impl<P: Platform> Machine<P> {
     }
 
     /// EDIT 行番号 / EDIT . : その行から 1 画面分を表示して編集に戻る。
-    /// 以後 PageUp / PageDown でページを送れる (直接入力の文を実行すると解除)。
+    /// 以後 PageUp / PageDown で 1 行ずつスクロールできる (直接入力の文を実行すると解除)。
     fn st_edit(&mut self) -> Result<Flow> {
         let n = match self.peek() {
             Some(Token::Other('.')) => {
@@ -827,40 +835,57 @@ impl<P: Platform> Machine<P> {
             return Err(Error::UndefinedLine);
         }
         self.b.current = Some(n);
-        self.show_page(n);
+        self.text.locate(0, 0);
+        self.show_page(Slot::Line(n));
         self.b.cont = None;
         self.mode = Mode::Edit;
         Ok(Flow::Suspend)
     }
 
-    /// 行 top から画面に収まるだけ LIST して、カーソルを左上に置く
-    fn show_page(&mut self, top: u16) {
+    /// 行 top から画面に収まるだけ表示する (カーソルは動かさない)
+    fn show_page(&mut self, top: Slot) {
+        let (x, y) = (self.text.x, self.text.y);
         self.text.clear();
-        let mut used = 0;
-        for n in self.page_lines(top) {
-            if used > 0 {
+        let (mut used, mut slot) = (0, top);
+        loop {
+            let s = match slot {
+                Slot::Line(n) => self.b.list_line(n).unwrap(),
+                _ => String::new(),
+            };
+            used += line_rows(&s);
+            if used > self.text.rows() && slot != top {
+                break;
+            }
+            if slot != top {
                 self.text.newline();
             }
-            let s = self.b.list_line(n).unwrap();
-            used += line_rows(&s);
             self.text.put_str(&s);
+            slot = self.next_slot(slot);
         }
-        self.text.locate(0, 0);
+        self.text.locate(x, y);
         self.b.edit_top = Some(top);
     }
 
-    /// top から始めて画面に収まる行 (1 行目は収まらなくても含める)
-    fn page_lines(&self, top: u16) -> Vec<u16> {
-        let mut v = Vec::new();
-        let mut used = 0;
-        for &n in self.b.program.range(top..).map(|(n, _)| n) {
-            used += line_rows(&self.b.list_line(n).unwrap());
-            if used > self.text.rows() && !v.is_empty() {
-                break;
-            }
-            v.push(n);
+    /// 次 (下) の行
+    fn next_slot(&self, s: Slot) -> Slot {
+        let first = || self.b.program.keys().next().map_or(Slot::Below(1), |&n| Slot::Line(n));
+        match s {
+            Slot::Above(1) => first(),
+            Slot::Above(k) => Slot::Above(k - 1),
+            Slot::Line(n) => self.b.program.range(n + 1..).next().map_or(Slot::Below(1), |(&n, _)| Slot::Line(n)),
+            Slot::Below(k) => Slot::Below(k + 1),
         }
-        v
+    }
+
+    /// 前 (上) の行
+    fn prev_slot(&self, s: Slot) -> Slot {
+        let last = || self.b.program.keys().next_back().map_or(Slot::Above(1), |&n| Slot::Line(n));
+        match s {
+            Slot::Above(k) => Slot::Above(k + 1),
+            Slot::Line(n) => self.b.program.range(..n).next_back().map_or(Slot::Above(1), |(&n, _)| Slot::Line(n)),
+            Slot::Below(1) => last(),
+            Slot::Below(k) => Slot::Below(k - 1),
+        }
     }
 
     /// HELP キー: EDIT . の行 (なければ先頭行) から EDIT モードに入る
@@ -869,31 +894,19 @@ impl<P: Platform> Machine<P> {
         let n = self.b.program.range(from..).next().or(self.b.program.iter().next_back()).map(|(n, _)| *n);
         if let Some(n) = n {
             self.b.current = Some(n);
-            self.show_page(n);
+            self.text.locate(0, 0);
+            self.show_page(Slot::Line(n));
         }
     }
 
-    /// EDIT 中の PageDown / PageUp
+    /// EDIT 中の PageDown / PageUp: 1 行ずつ、端を越えても空行でスクロールする。
     pub(crate) fn page(&mut self, down: bool) {
         let Some(top) = self.b.edit_top else { return };
-        let new_top = if down {
-            let last = self.page_lines(top).last().copied();
-            last.and_then(|l| self.b.program.range(l + 1..).next().map(|(n, _)| *n))
-        } else {
-            let mut used = 0;
-            let mut t = None;
-            for &n in self.b.program.range(..top).rev().map(|(n, _)| n) {
-                used += line_rows(&self.b.list_line(n).unwrap());
-                if used > self.text.rows() && t.is_some() {
-                    break;
-                }
-                t = Some(n);
-            }
-            t
-        };
-        if let Some(t) = new_top {
-            self.show_page(t);
-        }
+        let t = if down { self.next_slot(top) } else { self.prev_slot(top) };
+        self.show_page(t);
+        // PageUp は 1 行目、PageDown は最終行へカーソルを移す (桁はそのまま)
+        let y = if down { self.text.rows() - 1 } else { 0 };
+        self.text.locate(self.text.x, y);
     }
 
     // ---- 変数 ----
