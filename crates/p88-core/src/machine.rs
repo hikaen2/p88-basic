@@ -25,6 +25,8 @@ pub trait Platform {
     fn millis(&self) -> u64;
     /// 短いビープ音 (約 0.1 秒)。音が出せなければ何もしない。
     fn beep(&mut self) {}
+    /// エラーと Break のメッセージを画面の外 (端末・シリアル) にも残す。既定では何もしない。
+    fn log(&mut self, _msg: &str) {}
     /// 保存先のファイルを読む。name は大文字 (例: TEST.BAS)。
     fn read_file(&mut self, _name: &str) -> Result<Vec<u8>, FileError> {
         Err(FileError::Io)
@@ -42,7 +44,7 @@ pub trait Platform {
     }
 }
 
-pub const TITLE: &str = "p88 BASIC Version 0.1";
+pub const TITLE: &str = "P88 BASIC version 0.1";
 /// BASIC が使えるメモリの大きさ (プログラム + 変数)
 pub const MEMORY_SIZE: usize = 1 << 20;
 
@@ -137,6 +139,8 @@ impl<P: Platform> Machine<P> {
 
     fn key(&mut self, k: Key) {
         match &self.mode {
+            Mode::Edit if matches!(k, Key::PageUp | Key::PageDown) => self.page(k == Key::PageDown),
+            Mode::Edit if k == Key::Help => self.help(),
             Mode::Edit => {
                 if let Some(line) = self.editor.key(&mut self.text, k) {
                     self.enter_line(line);
@@ -146,8 +150,8 @@ impl<P: Platform> Machine<P> {
                 if k == Key::Stop {
                     let at = Pos { line: self.b.line, pos: self.b.pos };
                     self.break_at(at);
-                } else if self.inkeys.len() < INKEY_BUFFER {
-                    self.inkeys.push_back(k.code());
+                } else if let (Some(c), true) = (k.code(), self.inkeys.len() < INKEY_BUFFER) {
+                    self.inkeys.push_back(c);
                 }
             }
             Mode::Input(st) => match k {
@@ -217,6 +221,7 @@ pub mod tests {
         /// 呼ばれるたびに 1 ミリ秒進む時計
         pub ms: core::cell::Cell<u64>,
         pub beeps: usize,
+        pub logs: Vec<String>,
         pub files: alloc::collections::BTreeMap<String, Vec<u8>>,
     }
 
@@ -230,6 +235,9 @@ pub mod tests {
         }
         fn beep(&mut self) {
             self.beeps += 1;
+        }
+        fn log(&mut self, msg: &str) {
+            self.logs.push(String::from(msg));
         }
         fn read_file(&mut self, name: &str) -> Result<Vec<u8>, FileError> {
             self.files.get(name).cloned().ok_or(FileError::NotFound)

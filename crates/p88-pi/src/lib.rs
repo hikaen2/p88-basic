@@ -109,6 +109,10 @@ impl Platform for Pi {
         unsafe { ffi::p88_beep() }
     }
 
+    fn log(&mut self, msg: &str) {
+        log(msg);
+    }
+
     fn read_file(&mut self, name: &str) -> Result<Vec<u8>, FileError> {
         let n = c_name(name);
         let (mut p, mut len) = (core::ptr::null_mut(), 0usize);

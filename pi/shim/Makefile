@@ -1,5 +1,5 @@
 #
-# p88 カーネル: Circle + Rust (crates/p88-pi)
+# P88 カーネル: Circle + Rust (crates/p88-pi)
 #
 CIRCLEHOME = ../circle
 ROOT       = ../..

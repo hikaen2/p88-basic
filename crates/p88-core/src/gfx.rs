@@ -12,6 +12,15 @@ pub struct Graphics {
     pub last: (i32, i32),
 }
 
+/// 点 (中心からの相対、y は下向き) の角度が弧 s〜e (反時計回り) に入るか
+fn in_arc(x: i32, y: i32, s: f32, e: f32) -> bool {
+    let mut a = libm::atan2f(-y as f32, x as f32);
+    if a < 0.0 {
+        a += 2.0 * core::f32::consts::PI;
+    }
+    if s <= e { s <= a && a <= e } else { a >= s || a <= e }
+}
+
 impl Default for Graphics {
     fn default() -> Self {
         Self::new()
@@ -86,20 +95,52 @@ impl Graphics {
         self.line((x0, y1), (x0, y0), c);
     }
 
-    /// 円 (中点アルゴリズム)
-    pub fn circle(&mut self, (cx, cy): (i32, i32), r: i32, c: u8) {
-        let (mut x, mut y, mut d) = (r, 0, 1 - r);
-        while x >= y {
-            for (px, py) in [(x, y), (y, x), (-y, x), (-x, y), (-x, -y), (-y, -x), (y, -x), (x, -y)] {
-                self.pset(cx + px, cy + py, c);
+    /// 円
+    pub fn circle(&mut self, center: (i32, i32), r: i32, c: u8) {
+        self.ellipse(center, r, r, None, c);
+    }
+
+    /// 横半径 rx、縦半径 ry の楕円 (中点アルゴリズム)。
+    /// arc が Some((開始, 終了)) なら、その角度 (ラジアン、右が 0 で反時計回り、0〜2π) の弧だけ描く。
+    pub fn ellipse(&mut self, (cx, cy): (i32, i32), rx: i32, ry: i32, arc: Option<(f32, f32)>, c: u8) {
+        let plot = |g: &mut Self, x: i64, y: i64| {
+            let (x, y) = (x as i32, y as i32);
+            for (px, py) in [(x, y), (-x, y), (x, -y), (-x, -y)] {
+                if arc.is_none_or(|(s, e)| in_arc(px, py, s, e)) {
+                    g.pset(cx + px, cy + py, c);
+                }
             }
-            y += 1;
+        };
+        if ry == 0 {
+            for x in 0..=rx as i64 {
+                plot(self, x, 0);
+            }
+            return;
+        }
+        // 4 倍して整数で計算する
+        let (a2, b2) = ((rx as i64).pow(2), (ry as i64).pow(2));
+        let (mut x, mut y) = (0i64, ry as i64);
+        let mut d = 4 * b2 - 4 * a2 * y + a2;
+        while b2 * x < a2 * y {
+            plot(self, x, y);
             if d < 0 {
-                d += 2 * y + 1;
+                d += 4 * b2 * (2 * x + 3);
             } else {
-                x -= 1;
-                d += 2 * (y - x) + 1;
+                d += 4 * b2 * (2 * x + 3) + 4 * a2 * (2 - 2 * y);
+                y -= 1;
             }
+            x += 1;
+        }
+        let mut d = b2 * (2 * x + 1).pow(2) + 4 * a2 * (y - 1).pow(2) - 4 * a2 * b2;
+        while y >= 0 {
+            plot(self, x, y);
+            if d > 0 {
+                d += 4 * a2 * (3 - 2 * y);
+            } else {
+                d += 4 * b2 * (2 * x + 2) + 4 * a2 * (3 - 2 * y);
+                x += 1;
+            }
+            y -= 1;
         }
     }
 

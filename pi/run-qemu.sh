@@ -1,5 +1,5 @@
 #!/bin/sh
-# QEMU で p88 を起動する。Circle は ./configure --qemu でビルドしておくこと。
+# QEMU で P88 を起動する。Circle は ./configure --qemu でビルドしておくこと。
 # 使い方: pi/run-qemu.sh [追加の qemu オプション...]
 set -e
 DIR=$(cd "$(dirname "$0")" && pwd)

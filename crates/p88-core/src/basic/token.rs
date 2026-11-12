@@ -22,7 +22,7 @@ keywords! {
     "DATA" => Data, "RESTORE" => Restore, "LIST" => List, "RUN" => Run, "NEW" => New,
     "CONT" => Cont, "CLS" => Cls, "LOCATE" => Locate, "COLOR" => Color, "WIDTH" => Width,
     "PSET" => Pset, "PRESET" => Preset, "CIRCLE" => Circle, "PAINT" => Paint, "BEEP" => Beep,
-    "SAVE" => Save, "LOAD" => Load, "FILES" => Files, "KILL" => Kill,
+    "EDIT" => Edit, "SAVE" => Save, "LOAD" => Load, "FILES" => Files, "KILL" => Kill,
     "AND" => And, "OR" => Or, "XOR" => Xor, "NOT" => Not, "MOD" => Mod,
     "ABS" => Abs, "INT" => Int, "FIX" => Fix, "SGN" => Sgn, "SQR" => Sqr, "SIN" => Sin,
     "COS" => Cos, "TAN" => Tan, "ATN" => Atn, "EXP" => Exp, "LOG" => Log, "RND" => Rnd,

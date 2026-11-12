@@ -65,7 +65,7 @@ impl Editor {
                     fix_tail(t);
                 }
             }
-            Key::Stop => {}
+            Key::Stop | Key::PageUp | Key::PageDown | Key::Help => {}
         }
         None
     }

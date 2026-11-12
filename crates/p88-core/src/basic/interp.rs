@@ -61,6 +61,10 @@ pub struct Basic {
     data_ptr: usize,
     pub cont: Option<Pos>,
     pub line: Option<u16>,
+    /// EDIT . の対象 (最後に入力した行、またはエラー・中断の行)
+    pub current: Option<u16>,
+    /// EDIT で表示中のページの先頭行 (None なら EDIT モードでない)
+    pub edit_top: Option<u16>,
     toks: Rc<[Token]>,
     pub pos: usize,
     /// 実行中の文の先頭 (中断・エラー時の位置)
@@ -89,12 +93,14 @@ impl Basic {
     }
 
     /// 行番号付きの行を登録する。本文が空なら削除。
+    /// 行番号の直後の空白 1 つは区切りとして捨て、残りはインデントとして保持する。
     pub fn store_line(&mut self, n: u16, body: &str) {
-        let body = body.trim_start();
+        let body = body.strip_prefix(' ').unwrap_or(body);
         if body.trim().is_empty() {
             self.program.remove(&n);
         } else {
             self.program.insert(n, tokenize(body).into());
+            self.current = Some(n);
         }
         self.cont = None;
         self.data = None;
@@ -104,6 +110,20 @@ impl Basic {
     pub fn list_line(&self, n: u16) -> Option<String> {
         self.program.get(&n).map(|t| alloc::format!("{n} {}", detokenize(t)))
     }
+}
+
+/// LIST した 1 行が画面で占める行数 (全角が行末に入らなければ次の行へ送る)
+fn line_rows(s: &str) -> usize {
+    let (mut rows, mut x) = (1, 0);
+    for c in s.encode_utf16() {
+        let w = crate::font::width(c);
+        if x + w > crate::text::COLS {
+            rows += 1;
+            x = 0;
+        }
+        x += w;
+    }
+    rows
 }
 
 /// 変数名を型付きのキーにする (接尾辞なしと # は単精度 !)
@@ -162,6 +182,7 @@ impl<P: Platform> Machine<P> {
             }
             return;
         }
+        self.b.edit_top = None;
         self.b.direct = tokenize(t).into();
         self.b.line = None;
         self.b.toks = self.b.direct.clone();
@@ -173,12 +194,16 @@ impl<P: Platform> Machine<P> {
         if self.text.x != 0 {
             self.text.newline();
         }
+        if line.is_some() {
+            self.b.current = line;
+        }
         let msg = match line {
             Some(n) => alloc::format!("{} in {n}", e.message()),
             None => String::from(e.message()),
         };
         self.text.put_str(&msg);
         self.text.newline();
+        self.platform.log(&msg);
     }
 
     /// 実行を止めて編集に戻る
@@ -194,6 +219,7 @@ impl<P: Platform> Machine<P> {
             None => String::from("Break"),
         };
         if at.line.is_some() {
+            self.b.current = at.line;
             self.b.cont = Some(at);
         }
         if self.text.x != 0 {
@@ -201,6 +227,7 @@ impl<P: Platform> Machine<P> {
         }
         self.text.put_str(&msg);
         self.text.newline();
+        self.platform.log(&msg);
         self.finish();
     }
 
@@ -425,6 +452,7 @@ impl<P: Platform> Machine<P> {
                 Ok(Flow::Next)
             }
             Kw::List => self.st_list(),
+            Kw::Edit => self.st_edit(),
             Kw::Run => {
                 let start = if self.at_end() { None } else { Some(self.line_number()?) };
                 self.b.clear_vars();
@@ -782,6 +810,92 @@ impl<P: Platform> Machine<P> {
         Ok(Flow::Next)
     }
 
+    /// EDIT 行番号 / EDIT . : その行から 1 画面分を表示して編集に戻る。
+    /// 以後 PageUp / PageDown でページを送れる (直接入力の文を実行すると解除)。
+    fn st_edit(&mut self) -> Result<Flow> {
+        let n = match self.peek() {
+            Some(Token::Other('.')) => {
+                self.b.pos += 1;
+                self.b.current.ok_or(Error::UndefinedLine)?
+            }
+            _ => self.line_number()?,
+        };
+        if !self.at_end() {
+            return Err(Error::Syntax);
+        }
+        if !self.b.program.contains_key(&n) {
+            return Err(Error::UndefinedLine);
+        }
+        self.b.current = Some(n);
+        self.show_page(n);
+        self.b.cont = None;
+        self.mode = Mode::Edit;
+        Ok(Flow::Suspend)
+    }
+
+    /// 行 top から画面に収まるだけ LIST して、カーソルを左上に置く
+    fn show_page(&mut self, top: u16) {
+        self.text.clear();
+        let mut used = 0;
+        for n in self.page_lines(top) {
+            if used > 0 {
+                self.text.newline();
+            }
+            let s = self.b.list_line(n).unwrap();
+            used += line_rows(&s);
+            self.text.put_str(&s);
+        }
+        self.text.locate(0, 0);
+        self.b.edit_top = Some(top);
+    }
+
+    /// top から始めて画面に収まる行 (1 行目は収まらなくても含める)
+    fn page_lines(&self, top: u16) -> Vec<u16> {
+        let mut v = Vec::new();
+        let mut used = 0;
+        for &n in self.b.program.range(top..).map(|(n, _)| n) {
+            used += line_rows(&self.b.list_line(n).unwrap());
+            if used > self.text.rows() && !v.is_empty() {
+                break;
+            }
+            v.push(n);
+        }
+        v
+    }
+
+    /// HELP キー: EDIT . の行 (なければ先頭行) から EDIT モードに入る
+    pub(crate) fn help(&mut self) {
+        let from = self.b.current.unwrap_or(0);
+        let n = self.b.program.range(from..).next().or(self.b.program.iter().next_back()).map(|(n, _)| *n);
+        if let Some(n) = n {
+            self.b.current = Some(n);
+            self.show_page(n);
+        }
+    }
+
+    /// EDIT 中の PageDown / PageUp
+    pub(crate) fn page(&mut self, down: bool) {
+        let Some(top) = self.b.edit_top else { return };
+        let new_top = if down {
+            let last = self.page_lines(top).last().copied();
+            last.and_then(|l| self.b.program.range(l + 1..).next().map(|(n, _)| *n))
+        } else {
+            let mut used = 0;
+            let mut t = None;
+            for &n in self.b.program.range(..top).rev().map(|(n, _)| n) {
+                used += line_rows(&self.b.list_line(n).unwrap());
+                if used > self.text.rows() && t.is_some() {
+                    break;
+                }
+                t = Some(n);
+            }
+            t
+        };
+        if let Some(t) = new_top {
+            self.show_page(t);
+        }
+    }
+
     // ---- 変数 ----
 
     fn get_var(&self, key: &str) -> Value {
@@ -995,17 +1109,18 @@ impl<P: Platform> Machine<P> {
         self.pow_expr()
     }
 
+    /// ^ は右結合 (2^3^2 = 2^9)。指数には符号を付けられる。
     fn pow_expr(&mut self) -> Result<Value> {
-        let mut a = self.primary()?;
-        while self.accept_op(Op::Pow) {
-            let b = if self.accept_op(Op::Minus) { negate(self.primary()?)? } else { self.primary()? };
-            let (x, y) = (a.num()?, b.num()?);
-            if x == 0.0 && y < 0.0 {
-                return Err(Error::DivisionByZero);
-            }
-            a = check_f(libm::powf(x, y))?;
+        let a = self.primary()?;
+        if !self.accept_op(Op::Pow) {
+            return Ok(a);
         }
-        Ok(a)
+        let b = self.unary()?;
+        let (x, y) = (a.num()?, b.num()?);
+        if x == 0.0 && y < 0.0 {
+            return Err(Error::DivisionByZero);
+        }
+        check_f(libm::powf(x, y))
     }
 
     fn primary(&mut self) -> Result<Value> {

@@ -63,6 +63,17 @@ fn add_and_replace_lines() {
 }
 
 #[test]
+fn keeps_indent() {
+    assert_eq!(out(&["10   print 1", "20print 2", "LIST"]), ["10   PRINT 1", "20 PRINT 2"]);
+    assert_eq!(out(&["10   PRINT 1", "RUN"]), [" 1"]);
+}
+
+#[test]
+fn pow_is_right_assoc() {
+    assert_eq!(out(&["PRINT 2^3^2;-2^2;2^-1"]), [" 512 -4  .5"]);
+}
+
+#[test]
 fn delete_line() {
     assert_eq!(out(&["10 PRINT 1", "10", "LIST"]), Vec::<String>::new());
 }
@@ -570,4 +581,111 @@ fn no_storage_gives_disk_io_error() {
     m.enter_line("FILES".into());
     m.step();
     assert_eq!(row(&m.text, 3), "Disk I/O error");
+}
+
+#[test]
+fn edit_pages() {
+    let mut m = machine();
+    for i in 1..=60 {
+        type_line(&mut m, &alloc::format!("{} PRINT {}", i * 10, i));
+    }
+    type_line(&mut m, "EDIT 100");
+    assert_eq!(row(&m.text, 0), "100 PRINT 10");
+    assert_eq!(row(&m.text, 24), "340 PRINT 34");
+    assert_eq!((m.text.x, m.text.y), (0, 0));
+    assert!(matches!(m.mode, Mode::Edit));
+    m.platform.keys.push_back(Key::PageDown);
+    settle(&mut m);
+    assert_eq!(row(&m.text, 0), "350 PRINT 35");
+    assert_eq!(row(&m.text, 25 - 1), "590 PRINT 59");
+    m.platform.keys.push_back(Key::PageDown);
+    settle(&mut m);
+    assert_eq!(row(&m.text, 0), "600 PRINT 60");
+    m.platform.keys.push_back(Key::PageDown); // 最後のページでは動かない
+    settle(&mut m);
+    assert_eq!(row(&m.text, 0), "600 PRINT 60");
+    m.platform.keys.extend([Key::PageUp, Key::PageUp, Key::PageUp]);
+    settle(&mut m);
+    assert_eq!(row(&m.text, 0), "10 PRINT 1");
+    // 画面上で書き換えて RET すると行が置き換わり、ページ送りは続けられる
+    m.text.locate(9, 0);
+    m.platform.keys.extend([Key::Char('9' as u16), Key::Enter, Key::PageDown]);
+    settle(&mut m);
+    assert_eq!(row(&m.text, 0), "260 PRINT 26");
+    m.platform.keys.push_back(Key::PageUp);
+    settle(&mut m);
+    assert_eq!(row(&m.text, 0), "10 PRINT 9");
+}
+
+#[test]
+fn edit_ends_on_run() {
+    let mut m = machine();
+    for i in 1..=60 {
+        type_line(&mut m, &alloc::format!("{} REM", i * 10));
+    }
+    type_line(&mut m, "EDIT 10");
+    m.text.locate(0, 24);
+    type_line(&mut m, "RUN");
+    m.text.clear();
+    m.platform.keys.push_back(Key::PageDown);
+    settle(&mut m);
+    assert_eq!(row(&m.text, 0), "");
+}
+
+#[test]
+fn edit_dot_and_errors() {
+    let mut m = machine();
+    type_line(&mut m, "10 A=1");
+    type_line(&mut m, "20 PRINT 1+");
+    type_line(&mut m, "RUN");
+    type_line(&mut m, "EDIT .");
+    assert_eq!(row(&m.text, 0), "20 PRINT 1+");
+    assert_eq!(out(&["EDIT 30"]), ["Undefined line number"]);
+}
+
+#[test]
+fn help_key_enters_edit() {
+    let mut m = machine();
+    type_line(&mut m, "10 A=1");
+    type_line(&mut m, "20 B=2");
+    type_line(&mut m, "PRINT 1");
+    m.platform.keys.push_back(Key::Help);
+    settle(&mut m);
+    assert_eq!(row(&m.text, 0), "20 B=2");
+    m.platform.keys.push_back(Key::PageUp);
+    settle(&mut m);
+    assert_eq!(row(&m.text, 0), "10 A=1");
+}
+
+#[test]
+fn circle_ratio_and_arc() {
+    let mut m = machine();
+    // 比率 0.5: 横 80、縦 40 の楕円
+    type_line(&mut m, "CIRCLE (320,200),80,5,,,0.5");
+    assert_eq!(lines(&m)[1], "Ok");
+    assert_eq!(m.gfx.point(400, 200), 5);
+    assert_eq!(m.gfx.point(320, 160), 5);
+    assert_eq!(m.gfx.point(320, 120), 0);
+    // 比率 2: 横 20、縦 40
+    type_line(&mut m, "CLS 3:CIRCLE (100,100),40,5,,,2");
+    assert_eq!(m.gfx.point(120, 100), 5);
+    assert_eq!(m.gfx.point(100, 60), 5);
+    // 上半分の弧 (0〜π) と、負の角度で中心への線 (扇形)
+    type_line(&mut m, "CLS 3:CIRCLE (320,200),50,5,0,3.1416");
+    assert_eq!(m.gfx.point(320, 150), 5);
+    assert_eq!(m.gfx.point(320, 250), 0);
+    type_line(&mut m, "CLS 3:CIRCLE (320,200),50,5,-0.0001,-1.5708");
+    assert_eq!(m.gfx.point(345, 200), 5);
+    assert_eq!(m.gfx.point(320, 175), 5);
+    assert_eq!(out(&["CIRCLE (320,200),50,5,,,0"]), ["Illegal function call"]);
+}
+
+#[test]
+fn errors_are_logged() {
+    let mut m = machine();
+    type_line(&mut m, "10 PRINT 1+");
+    type_line(&mut m, "RUN");
+    type_line(&mut m, "PRINT 1/0");
+    type_line(&mut m, "STOP");
+    assert_eq!(m.platform.logs, ["Syntax error in 10", "Division by zero", "Break"]);
 }

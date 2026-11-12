@@ -1,4 +1,4 @@
-//! PC 上で p88 を動かす (開発用)。プログラムの保存先は ./disk/ (--disk DIR で変更)。
+//! PC 上で P88 を動かす (開発用)。プログラムの保存先は ./disk/ (--disk DIR で変更)。
 //!   cargo run -p p88-host                          ウィンドウで起動
 //!   cargo run -p p88-host -- --disk samples        samples/ のプログラムを LOAD できる
 //!   cargo run -p p88-host -- --exec 'LINE' ... --screenshot F
@@ -46,6 +46,9 @@ impl Platform for Host {
         print!("\x07");
         let _ = std::io::stdout().flush();
     }
+    fn log(&mut self, msg: &str) {
+        eprintln!("{msg}");
+    }
     fn read_file(&mut self, name: &str) -> Result<Vec<u8>, FileError> {
         let p = self.find(name).ok_or(FileError::NotFound)?;
         std::fs::read(p).map_err(io)
@@ -87,6 +90,9 @@ fn special(k: K, shift: bool, ctrl: bool) -> Option<Key> {
         K::Insert => Key::Insert,
         K::Home if shift => Key::Clear,
         K::Home => Key::Home,
+        K::PageUp => Key::PageUp,
+        K::PageDown => Key::PageDown,
+        K::End => Key::Help,
         K::Left => Key::Left,
         K::Right => Key::Right,
         K::Up => Key::Up,

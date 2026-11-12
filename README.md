@@ -1,7 +1,9 @@
-# p88-basic
+# P88 BASIC
 
 Raspberry Pi Zero W でベアメタル起動する、N88-BASIC 風の BASIC マシン。
 HDMI 画面と USB キーボードで動く単体の 8 ビット PC 風マシンを目指す。
+
+言語の説明は [docs/manual.md](docs/manual.md)。
 
 ## ライセンス
 
@@ -49,7 +51,7 @@ cd pi/circle
 cd sample/08-usbkeyboard && make -j8              # kernel.img ができる
 ```
 
-### p88 カーネル
+### P88 カーネル
 
 ```
 pi/build.sh qemu      # QEMU 用 (pi/shim/kernel.img)

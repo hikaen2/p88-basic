@@ -1,5 +1,5 @@
 #!/bin/sh
-# p88 カーネルをビルドする。 使い方: pi/build.sh [hw|qemu]  (既定: hw)
+# P88 カーネルをビルドする。 使い方: pi/build.sh [hw|qemu]  (既定: hw)
 # モードが前回と違うときだけ Circle を設定し直して全体を再ビルドする。
 set -e
 MODE=${1:-hw}

@@ -42,8 +42,10 @@ impl<P: Platform> Machine<P> {
                     return Err(Error::IllegalFunctionCall);
                 }
                 let c = self.opt_color(7)?;
-                self.gfx.circle(center, r as i32, c);
-                self.gfx.last = center;
+                let start = self.opt_num()?;
+                let end = self.opt_num()?;
+                let ratio = self.opt_num()?.unwrap_or(1.0);
+                self.st_circle(center, r as i32, c, start, end, ratio)?;
             }
             Kw::Paint => {
                 let p = self.point_arg()?;
@@ -82,6 +84,40 @@ impl<P: Platform> Machine<P> {
             return Ok(def);
         }
         color(&self.expr()?)
+    }
+
+    /// 省略できる ", 数値"
+    fn opt_num(&mut self) -> Result<Option<f32>> {
+        if !self.accept_op(Op::Comma) || self.at_end() || self.is_comma() {
+            return Ok(None);
+        }
+        Ok(Some(self.expr()?.num()?))
+    }
+
+    /// CIRCLE (x,y),半径[,色[,開始角[,終了角[,比率]]]]
+    /// 比率は 縦/横。1 より小さければ横が半径、大きければ縦が半径になる。
+    /// 角度が負なら、その端から中心へ線を引く。
+    fn st_circle(&mut self, (cx, cy): (i32, i32), r: i32, c: u8, start: Option<f32>, end: Option<f32>, ratio: f32) -> Result<()> {
+        const TAU: f32 = 2.0 * core::f32::consts::PI;
+        if ratio <= 0.0 || [start, end].iter().flatten().any(|a| a.abs() > TAU + 1e-4) {
+            return Err(Error::IllegalFunctionCall);
+        }
+        let (rx, ry) = if ratio < 1.0 {
+            (r, libm::roundf(r as f32 * ratio) as i32)
+        } else {
+            (libm::roundf(r as f32 / ratio) as i32, r)
+        };
+        let arc = (start.is_some() || end.is_some()).then(|| {
+            (start.unwrap_or(0.0).abs().min(TAU), end.unwrap_or(TAU).abs().min(TAU))
+        });
+        self.gfx.ellipse((cx, cy), rx, ry, arc, c);
+        for a in [start, end].into_iter().flatten().filter(|a| *a < 0.0) {
+            let a = -a;
+            let p = (cx + libm::roundf(rx as f32 * libm::cosf(a)) as i32, cy - libm::roundf(ry as f32 * libm::sinf(a)) as i32);
+            self.gfx.line((cx, cy), p, c);
+        }
+        self.gfx.last = (cx, cy);
+        Ok(())
     }
 
     fn is_comma(&mut self) -> bool {

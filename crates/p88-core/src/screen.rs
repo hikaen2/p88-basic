@@ -29,7 +29,7 @@ impl Palette {
 
 /// 640x400 の 0x00RRGGBB バッファへ合成する。
 /// グラフィックの上に文字の前景ドットを重ねる (文字の背景は透ける)。
-/// `cursor` が Some のとき、その位置に下線カーソルを描く。
+/// `cursor` が Some のとき、その位置のセルを反転してブロックカーソルにする。
 pub fn compose(text: &TextScreen, gfx: &Graphics, pal: &Palette, cursor: Option<(usize, usize)>, out: &mut [u32]) {
     let lut: [u32; 16] = core::array::from_fn(|i| pal.rgb(i as u8));
     for (o, &p) in out.iter_mut().zip(gfx.pix.iter()) {
@@ -59,10 +59,11 @@ pub fn compose(text: &TextScreen, gfx: &Graphics, pal: &Palette, cursor: Option<
     }
     if let Some((cx, cy)) = cursor {
         let cx = cx.min(COLS - 1);
-        let fg = lut[(text.color & 15) as usize];
-        for gy in 14..16 {
+        let wide = cx + 1 < COLS && text.cell(cx + 1, cy).tail;
+        let w = if wide { 16 } else { 8 };
+        for gy in 0..16 {
             let row = (cy * pitch + top + gy) * WIDTH + cx * 8;
-            out[row..row + 8].fill(fg);
+            out[row..row + w].iter_mut().for_each(|p| *p ^= 0xFFFFFF);
         }
     }
 }
